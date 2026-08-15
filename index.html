@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CatalystAI</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0e1a; --surface: #111827; --surface2: #0d1525;
+      --border: #1e2d45; --border2: #2a3a5a; --accent: #7dd8ff;
+      --accent2: #1d4ed8; --text: #e8eaf0; --muted: #6b7a99;
+      --green: #34d399; --red: #f87171; --yellow: #fbbf24; --purple: #a78bfa;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .app { max-width: 980px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    header { text-align: center; margin-bottom: 2.5rem; }
+    header h1 { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; color: var(--accent); letter-spacing: -1px; }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.4rem; }
+    .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 2rem; flex-wrap: wrap; }
+    .tab { flex: 1; min-width: 100px; padding: 0.65rem 0.5rem; border-radius: 9px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.83rem; font-family: 'DM Sans', sans-serif; font-weight: 500; transition: all 0.2s; }
+    .tab.active { background: #1a2744; color: var(--accent); border: 1px solid #2a4a7f; }
+    .panel { display: none; } .panel.active { display: block; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.2rem; }
+    .section-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 0.75rem; }
+    .quick-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
+    .quick-btn { padding: 4px 14px; border-radius: 20px; border: 1px solid #2a4a7f; background: var(--surface2); color: var(--accent); font-size: 0.78rem; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; }
+    .quick-btn:hover { background: #1a2744; }
+    .input-row { display: flex; gap: 10px; align-items: center; }
+    .input-col { display: flex; flex-direction: column; gap: 10px; }
+    input[type="text"] { flex: 1; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 8px; padding: 0.65rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; outline: none; transition: border 0.2s; }
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: #3a4a6a; }
+    .btn { padding: 0.65rem 1.3rem; border-radius: 8px; border: none; background: var(--accent2); color: #fff; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 0.88rem; transition: background 0.2s; white-space: nowrap; margin-top: 0.6rem; }
+    .btn:hover { background: #2563eb; } .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-purple { background: #6d28d9; } .btn-purple:hover { background: #7c3aed; }
+    .btn-teal { background: #0f766e; } .btn-teal:hover { background: #0d9488; }
+    .error { color: var(--red); font-size: 0.83rem; margin-top: 0.6rem; }
+    .plus { color: var(--muted); font-size: 1.2rem; }
+
+    /* 3D VIEWER */
+    #viewer-wrap { width: 100%; height: 380px; background: #070c18; border-radius: 12px; border: 1px solid #1a2744; position: relative; overflow: hidden; }
+    #viewer-container { width: 100%; height: 100%; }
+    #viewer-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--muted); font-size: 0.9rem; pointer-events: none; }
+    .props-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 1rem; }
+    .prop-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; }
+    .prop-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0.25rem; }
+    .prop-value { font-family: 'Space Mono', monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700; word-break: break-all; }
+    .mol-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .smiles-tag { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: #4a6a9a; word-break: break-all; margin-bottom: 0.25rem; }
+
+    /* REACTION */
+    .ai-output { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; margin-top: 1rem; font-size: 0.87rem; line-height: 1.75; color: #c5cfe0; white-space: pre-wrap; min-height: 80px; }
+    .ai-output.loading { color: var(--muted); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.35} }
+    .reaction-eq { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .r-chip { background: #1a2744; border: 1px solid #2a4a7f; border-radius: 8px; padding: 6px 14px; font-family: 'Space Mono', monospace; font-size: 0.82rem; color: var(--accent); }
+    .r-chip.product { border-color: #065f46; color: var(--green); background: #022c1e; }
+    .arrow { color: var(--muted); font-size: 1.1rem; }
+
+    /* DRUG DISCOVERY */
+    .drug-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .drug-card { background: var(--surface2); border: 1px solid #2a2a4a; border-radius: 12px; padding: 1.2rem; transition: border-color 0.2s; }
+    .drug-card:hover { border-color: var(--purple); }
+    .drug-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .drug-name { font-size: 0.95rem; font-weight: 600; color: var(--purple); }
+    .stage-badge { font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+    .stage-approved { background: #022c1e; color: var(--green); border: 1px solid #065f46; }
+    .stage-clinical { background: #1e1535; color: var(--purple); border: 1px solid #3a2a6a; }
+    .stage-preclinical { background: #3a2a0a; color: var(--yellow); border: 1px solid #5a3a0a; }
+    .stage-conceptual { background: #1a1a2a; color: var(--muted); border: 1px solid #2a2a3a; }
+    .lipo-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 0.8rem; }
+    .lipo-row { display: flex; align-items: center; gap: 8px; }
+    .lipo-lbl { font-size: 0.68rem; color: var(--muted); width: 30px; text-align: right; flex-shrink: 0; }
+    .lipo-track { flex: 1; height: 6px; background: #1a2744; border-radius: 3px; overflow: hidden; }
+    .lipo-fill { height: 100%; border-radius: 3px; }
+    .lipo-fill.ok { background: var(--green); }
+    .lipo-fill.bad { background: var(--red); }
+    .lipo-val { font-family: 'Space Mono', monospace; font-size: 0.68rem; width: 44px; color: var(--text); flex-shrink: 0; }
+    .ro5-row { display: flex; align-items: center; gap: 8px; margin-bottom: 0.7rem; }
+    .drug-mech { font-size: 0.78rem; color: #8a9aba; line-height: 1.55; margin-bottom: 0.5rem; }
+    .drug-smiles-text { font-family: 'Space Mono', monospace; font-size: 0.64rem; color: #3a4a6a; word-break: break-all; margin-bottom: 0.5rem; }
+    .drug-actions { display: flex; gap: 6px; margin-top: 0.6rem; }
+    .drug-action-btn { flex: 1; padding: 6px 0; border-radius: 6px; border: 1px solid #2a4a7f; background: transparent; color: var(--accent); font-size: 0.73rem; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; }
+    .drug-action-btn:hover { background: #1a2744; }
+
+    /* PATHWAY ENGINE */
+    .pathway-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.2rem; }
+    .ov-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 1rem; text-align: center; }
+    .ov-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .ov-val { font-family: 'Space Mono', monospace; font-size: 0.95rem; font-weight: 700; }
+    .flow-wrap { overflow-x: auto; padding: 0.5rem 0 0.5rem; }
+    .flow { display: flex; align-items: center; min-width: max-content; }
+    .flow-node { display: flex; flex-direction: column; align-items: center; }
+    .flow-box { background: #1a2744; border: 1px solid #2a4a7f; border-radius: 8px; padding: 8px 12px; text-align: center; width: 120px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+    .flow-box:hover { border-color: var(--accent); background: #1e2e50; }
+    .flow-box.start-box { border-color: #065f46; background: #022c1e; }
+    .flow-box.end-box { border-color: #5a3a0a; background: #2a1500; }
+    .flow-box-name { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--accent); font-weight: 700; word-break: break-all; }
+    .flow-box.start-box .flow-box-name { color: var(--green); }
+    .flow-box.end-box .flow-box-name { color: var(--yellow); }
+    .flow-box-yield { font-size: 0.62rem; color: var(--muted); margin-top: 3px; }
+    .flow-connector { display: flex; flex-direction: column; align-items: center; width: 52px; flex-shrink: 0; }
+    .flow-step-label { font-size: 0.6rem; color: var(--muted); margin-bottom: 3px; }
+    .flow-line { width: 32px; height: 2px; background: #2a4a7f; }
+    .flow-arrowhead { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid #2a4a7f; }
+    .step-panel { background: var(--surface2); border: 1px solid #2a4a7f; border-radius: 10px; padding: 1rem 1.2rem; margin-top: 1rem; display: none; }
+    .step-panel.open { display: block; }
+    .step-panel-title { font-size: 0.82rem; font-weight: 600; color: var(--accent); margin-bottom: 0.7rem; }
+    .step-row { display: flex; gap: 10px; margin-bottom: 0.4rem; font-size: 0.8rem; align-items: flex-start; }
+    .step-key { color: var(--muted); width: 85px; flex-shrink: 0; }
+    .step-val { color: var(--text); flex: 1; line-height: 1.5; }
+    .yield-vis { display: flex; align-items: center; gap: 8px; margin-top: 0.6rem; }
+    .yield-track { flex: 1; height: 7px; background: #1a2744; border-radius: 4px; overflow: hidden; }
+    .yield-fill { height: 100%; border-radius: 4px; }
+    .yield-lbl { font-family: 'Space Mono', monospace; font-size: 0.7rem; width: 60px; }
+
+    /* RDKIT */
+    .rdkit-top { display: grid; grid-template-columns: 240px 1fr; gap: 1.2rem; margin-top: 1rem; align-items: start; }
+    .radar-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; display: flex; align-items: center; justify-content: center; }
+    .rule-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .rule-tile { background: var(--surface2); border-radius: 8px; padding: 0.8rem; border-left: 3px solid transparent; }
+    .rule-tile.pass { border-left-color: var(--green); }
+    .rule-tile.fail { border-left-color: var(--red); }
+    .rule-tile-name { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+    .rule-tile-verdict { font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; }
+    .rule-tile.pass .rule-tile-verdict { color: var(--green); }
+    .rule-tile.fail .rule-tile-verdict { color: var(--red); }
+    .rule-tile-detail { font-size: 0.7rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .verdict-banner { border-radius: 10px; padding: 0.9rem 1.2rem; margin-top: 1rem; display: flex; align-items: center; gap: 12px; }
+    .verdict-banner.good { background: #022c1e; border: 1px solid #065f46; }
+    .verdict-banner.ok   { background: #3a2a0a; border: 1px solid #5a3a0a; }
+    .verdict-banner.poor { background: #3a1515; border: 1px solid #5a1515; }
+    .verdict-icon { font-size: 1.4rem; }
+    .verdict-main { font-size: 0.9rem; font-weight: 600; }
+    .verdict-sub  { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .desc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>CatalystAI</h1>
+    <p>3D Viewer · Reaction Predictor · Drug Discovery · Pathway Engine · RDKit Properties</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('viewer')">3D Viewer</button>
+    <button class="tab" onclick="switchTab('reaction')">Reaction</button>
+    <button class="tab" onclick="switchTab('similar')">Similar Molecules</button>
+    <button class="tab" onclick="switchTab('pathway')">Pathway Engine</button>
+    <button class="tab" onclick="switchTab('rdkit')">RDKit Props</button>
+  </div>
+
+  <!-- 3D VIEWER -->
+  <div class="panel active" id="panel-viewer">
+    <div class="card">
+      <div class="section-label">Quick load</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickMol('ethanol')">Ethanol</button>
+        <button class="quick-btn" onclick="quickMol('caffeine')">Caffeine</button>
+        <button class="quick-btn" onclick="quickMol('aspirin')">Aspirin</button>
+        <button class="quick-btn" onclick="quickMol('glucose')">Glucose</button>
+        <button class="quick-btn" onclick="quickMol('dopamine')">Dopamine</button>
+        <button class="quick-btn" onclick="quickMol('benzene')">Benzene</button>
+        <button class="quick-btn" onclick="quickMol('paracetamol')">Paracetamol</button>
+      </div>
+      <div class="input-row">
+        <input type="text" id="mol-input" placeholder="Enter molecule name..." />
+        <button class="btn" id="mol-btn" onclick="loadMolecule()">Load 3D</button>
+      </div>
+      <div id="mol-error" class="error" style="display:none"></div>
+    </div>
+    <div class="card" id="mol-info" style="display:none">
+      <div id="mol-name" class="mol-name"></div>
+      <div id="mol-smiles" class="smiles-tag"></div>
+      <div class="props-grid" id="props-grid"></div>
+    </div>
+    <div id="viewer-wrap">
+      <div id="viewer-container"></div>
+      <div id="viewer-placeholder">🔬 Search any molecule above to render its 3D structure</div>
+    </div>
+  </div>
+
+  <!-- REACTION -->
+  <div class="panel" id="panel-reaction">
+    <div class="card">
+      <div class="section-label">Quick examples</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickRxn('HCl','NaOH')">HCl + NaOH</button>
+        <button class="quick-btn" onclick="quickRxn('H2','O2')">H₂ + O₂</button>
+        <button class="quick-btn" onclick="quickRxn('ethanol','acetic acid')">Esterification</button>
+        <button class="quick-btn" onclick="quickRxn('sodium','water')">Na + H₂O</button>
+        <button class="quick-btn" onclick="quickRxn('zinc','sulfuric acid')">Zn + H₂SO₄</button>
+      </div>
+      <div class="input-row">
+        <input type="text" id="r1" placeholder="Reactant 1" />
+        <span class="plus">+</span>
+        <input type="text" id="r2" placeholder="Reactant 2" />
+        <button class="btn" id="rxn-btn" onclick="predictReaction()">Predict</button>
+      </div>
+      <div id="rxn-error" class="error" style="display:none"></div>
+    </div>
+    <div class="card" id="rxn-result" style="display:none">
+      <div class="section-label">Predicted reaction</div>
+      <div class="reaction-eq" id="rxn-eq"></div>
+      <div class="ai-output" id="rxn-output"></div>
+    </div>
+  </div>
+
+  <!-- SIMILAR MOLECULES -->
+  <div class="panel" id="panel-similar">
+    <div class="card">
+      <div class="section-label">Find structurally similar compounds</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickSimilar('aspirin')">Aspirin</button>
+        <button class="quick-btn" onclick="quickSimilar('caffeine')">Caffeine</button>
+        <button class="quick-btn" onclick="quickSimilar('ibuprofen')">Ibuprofen</button>
+        <button class="quick-btn" onclick="quickSimilar('dopamine')">Dopamine</button>
+        <button class="quick-btn" onclick="quickSimilar('penicillin')">Penicillin</button>
+      </div>
+      <div class="input-row">
+        <input type="text" id="similar-input" placeholder="Enter a molecule name..." />
+        <button class="btn btn-purple" id="similar-btn" onclick="runSimilar()">Find Similar</button>
+      </div>
+      <div id="similar-error" class="error" style="display:none"></div>
+    </div>
+    <div id="similar-result" style="display:none">
+      <div class="card">
+        <div class="section-label" id="similar-heading"></div>
+        <div id="similar-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:0.8rem"></div>
+      </div>
+    </div>
+  </div>
+  
+
+  <!-- PATHWAY ENGINE -->
+  <div class="panel" id="panel-pathway">
+    <div class="card">
+      <div class="section-label">Multi-step synthesis planner</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickPathway('benzene','aniline','')">Benzene → Aniline</button>
+        <button class="quick-btn" onclick="quickPathway('ethanol','ethyl acetate','')">Ethanol → Ethyl Acetate</button>
+        <button class="quick-btn" onclick="quickPathway('toluene','benzoic acid','')">Toluene → Benzoic Acid</button>
+        <button class="quick-btn" onclick="quickPathway('glucose','ethanol','fermentation preferred')">Glucose → Ethanol</button>
+      </div>
+      <div class="input-col">
+        <input type="text" id="pathway-start" placeholder="Starting material (e.g. benzene)" />
+        <input type="text" id="pathway-target" placeholder="Target product (e.g. aniline)" />
+        <input type="text" id="pathway-constraints" placeholder="Constraints (optional): green chemistry, avoid halogens..." />
+      </div>
+      <button class="btn btn-teal" id="pathway-btn" onclick="runPathway()">Plan Pathway</button>
+      <div id="pathway-error" class="error" style="display:none"></div>
+    </div>
+    <div id="pathway-result" style="display:none">
+      <div class="card">
+        <div class="section-label">Overview</div>
+        <div class="pathway-overview" id="pathway-overview"></div>
+        <div class="section-label" style="margin-top:1.2rem;margin-bottom:0.5rem">Synthesis flow — click any step node for details</div>
+        <div class="flow-wrap"><div class="flow" id="pathway-flow"></div></div>
+        <div class="step-panel" id="step-panel">
+          <div class="step-panel-title" id="sp-title"></div>
+          <div class="step-row"><span class="step-key">Reagents</span><span class="step-val" id="sp-reagents"></span></div>
+          <div class="step-row"><span class="step-key">Conditions</span><span class="step-val" id="sp-conditions"></span></div>
+          <div class="step-row"><span class="step-key">Notes</span><span class="step-val" id="sp-notes"></span></div>
+          <div class="yield-vis">
+            <span class="step-key" style="color:var(--muted);font-size:0.75rem">Step yield</span>
+            <div class="yield-track"><div class="yield-fill" id="sp-yield-fill" style="width:0%"></div></div>
+            <span class="yield-lbl" id="sp-yield-lbl"></span>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="pathway-alts" style="display:none">
+        <div class="section-label">Alternatives &amp; green chemistry notes</div>
+        <div class="ai-output" id="pathway-alts-text" style="margin-top:0;min-height:30px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RDKIT PROPS -->
+  <div class="panel" id="panel-rdkit">
+    <div class="card">
+      <div class="section-label">SMILES input</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickRDKit('CCO')">Ethanol</button>
+        <button class="quick-btn" onclick="quickRDKit('CC(=O)Oc1ccccc1C(=O)O')">Aspirin</button>
+        <button class="quick-btn" onclick="quickRDKit('Cn1cnc2c1c(=O)n(C)c(=O)n2C')">Caffeine</button>
+        <button class="quick-btn" onclick="quickRDKit('CC(C)Cc1ccc(cc1)C(C)C(=O)O')">Ibuprofen</button>
+        <button class="quick-btn" onclick="quickRDKit('CC12CCC3C(C1CCC2O)CCC4=CC(=O)CCC34C')">Testosterone</button>
+      </div>
+      <div class="input-row">
+        <input type="text" id="rdkit-input" placeholder="Paste SMILES string here..." />
+        <button class="btn" id="rdkit-btn" onclick="runRDKit()">Compute</button>
+      </div>
+      <div id="rdkit-error" class="error" style="display:none"></div>
+    </div>
+    <div id="rdkit-result" style="display:none">
+      <div class="card">
+        <div class="rdkit-top">
+          <div class="radar-box"><canvas id="radar-chart" width="200" height="200"></canvas></div>
+          <div>
+            <div class="section-label" style="margin-bottom:0.6rem">Drug-likeness rules</div>
+            <div class="rule-tiles" id="rule-tiles"></div>
+          </div>
+        </div>
+        <div class="verdict-banner" id="verdict-banner" style="display:none">
+          <span class="verdict-icon" id="verdict-icon"></span>
+          <div>
+            <div class="verdict-main" id="verdict-main"></div>
+            <div class="verdict-sub" id="verdict-sub"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-label">All computed descriptors</div>
+        <div class="desc-grid" id="rdkit-desc-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let glviewer = null, radarChart = null;
+const TABS = ['viewer','reaction','similar','pathway','rdkit'];
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', TABS[i]===tab));
+  document.querySelectorAll('.panel').forEach((p,i) => p.classList.toggle('active', TABS[i]===tab));
+}
+
+/* ── 3D VIEWER ── */
+function quickMol(n) { document.getElementById('mol-input').value=n; loadMolecule(); }
+
+async function loadMolecule() {
+  const name = document.getElementById('mol-input').value.trim();
+  if (!name) return;
+  const errEl=document.getElementById('mol-error'), btn=document.getElementById('mol-btn');
+  errEl.style.display='none'; btn.disabled=true; btn.textContent='Loading...';
+  document.getElementById('mol-info').style.display='none';
+  const ph=document.getElementById('viewer-placeholder');
+  ph.textContent='⏳ Fetching...'; ph.style.display='block';
+  if (glviewer) { try{glviewer.clear();}catch(e){} glviewer=null; }
+  document.getElementById('viewer-container').innerHTML='';
+  try {
+    const res=await fetch(`${API}/molecule/${encodeURIComponent(name)}`);
+    if (!res.ok){const e=await res.json();throw new Error(e.detail);}
+    const d=await res.json();
+    document.getElementById('mol-name').textContent=d.name||name;
+    document.getElementById('mol-smiles').textContent=d.smiles?'SMILES: '+d.smiles:'';
+    document.getElementById('mol-info').style.display='block';
+    document.getElementById('props-grid').innerHTML=`
+      <div class="prop-card"><div class="prop-label">Formula</div><div class="prop-value">${d.formula||'—'}</div></div>
+      <div class="prop-card"><div class="prop-label">Mol. Weight</div><div class="prop-value">${d.molecular_weight?parseFloat(d.molecular_weight).toFixed(2)+' g/mol':'—'}</div></div>
+      <div class="prop-card"><div class="prop-label">LogP</div><div class="prop-value">${d.logp!=null?d.logp:'—'}</div></div>
+      <div class="prop-card"><div class="prop-label">HB Acceptors</div><div class="prop-value">${d.hb_acceptors??'—'}</div></div>
+      <div class="prop-card"><div class="prop-label">HB Donors</div><div class="prop-value">${d.hb_donors??'—'}</div></div>
+      <div class="prop-card"><div class="prop-label">PubChem CID</div><div class="prop-value">${d.cid}</div></div>`;
+    if (d.sdf) render3D(d.sdf); else ph.textContent='⚠ 3D structure unavailable';
+  } catch(e) {
+    errEl.textContent='✕ '+e.message; errEl.style.display='block';
+    ph.textContent='🔬 Search any molecule above';
+  } finally { btn.disabled=false; btn.textContent='Load 3D'; }
+}
+
+function render3D(sdf) {
+  const ph = document.getElementById('viewer-placeholder');
+  ph.style.display = 'none';
+  const c = document.getElementById('viewer-container');
+  c.innerHTML = '';
+  function tryRender(attemptsLeft) {
+    if (typeof $3Dmol === 'undefined') {
+      if (attemptsLeft <= 0) { ph.textContent = '✕ 3Dmol failed to load. Check internet connection.'; ph.style.display = 'block'; return; }
+      setTimeout(() => tryRender(attemptsLeft - 1), 300);
+      return;
+    }
+    try {
+      glviewer = $3Dmol.createViewer($(c), { backgroundColor: '0x070c18', antialias: true });
+      glviewer.addModel(sdf, 'sdf');
+      glviewer.setStyle({}, { stick: { colorscheme: 'Jmol', radius: 0.12 }, sphere: { colorscheme: 'Jmol', scale: 0.25 } });
+      glviewer.zoomTo(); glviewer.render(); glviewer.zoom(0.85, 1000);
+    } catch(e) {
+      ph.textContent = '✕ Render error: ' + e.message;
+      ph.style.display = 'block';
+    }
+  }
+  tryRender(10);
+}
+
+/* ── REACTION ── */
+function quickRxn(r1,r2){document.getElementById('r1').value=r1;document.getElementById('r2').value=r2;predictReaction();}
+
+async function predictReaction() {
+  const r1=document.getElementById('r1').value.trim(), r2=document.getElementById('r2').value.trim();
+  if (!r1||!r2) return;
+  const btn=document.getElementById('rxn-btn'),errEl=document.getElementById('rxn-error');
+  const out=document.getElementById('rxn-output'),result=document.getElementById('rxn-result'),eq=document.getElementById('rxn-eq');
+  errEl.style.display='none'; btn.disabled=true; btn.textContent='Predicting...';
+  result.style.display='block'; out.className='ai-output loading'; out.textContent='AI is analyzing the reaction...';
+  eq.innerHTML=`<div class="r-chip">${r1}</div><span class="arrow">+</span><div class="r-chip">${r2}</div><span class="arrow">→</span><span style="color:#4a6a9a">predicting...</span>`;
+  try {
+    const res=await fetch(`${API}/reaction`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reactant1:r1,reactant2:r2})});
+    if (!res.ok){const e=await res.json();throw new Error(e.detail);}
+    const d=await res.json(), text=d.analysis;
+    const pm=text.match(/PRODUCTS:\s*(.+)/i);
+    eq.innerHTML=`<div class="r-chip">${r1}</div><span class="arrow">+</span><div class="r-chip">${r2}</div><span class="arrow">→</span><div class="r-chip product">${pm?pm[1].trim():'?'}</div>`;
+    out.className='ai-output'; out.textContent=text;
+  } catch(e) {
+    errEl.textContent='✕ '+e.message; errEl.style.display='block'; result.style.display='none';
+  } finally { btn.disabled=false; btn.textContent='Predict'; }
+}
+
+/* ── SIMILAR MOLECULES ── */
+function quickSimilar(name) { document.getElementById('similar-input').value = name; runSimilar(); }
+
+async function runSimilar() {
+  const name = document.getElementById('similar-input').value.trim();
+  if (!name) return;
+  const btn = document.getElementById('similar-btn');
+  const errEl = document.getElementById('similar-error');
+  const result = document.getElementById('similar-result');
+  const grid = document.getElementById('similar-grid');
+  const heading = document.getElementById('similar-heading');
+
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Searching...';
+  result.style.display = 'block';
+  grid.innerHTML = '<div class="ai-output loading" style="grid-column:1/-1;margin-top:0">Finding structurally similar compounds...</div>';
+
+  try {
+    const res = await fetch(`${API}/similar/${encodeURIComponent(name)}`);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+    const d = await res.json();
+
+    heading.textContent = `Compounds similar to ${d.source} — click any card to view in 3D`;
+
+    grid.innerHTML = d.similar.map(m => `
+      <div onclick="goView3D('${m.cid}')" style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.1rem;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+        <div style="font-family:'Space Mono',monospace;font-size:0.82rem;color:var(--accent);font-weight:700;margin-bottom:4px">${m.formula || '—'}</div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.7rem;word-break:break-all;line-height:1.4">${m.name}</div>
+        <div style="font-size:0.82rem;color:#c5cfe0;line-height:1.6;margin-bottom:0.8rem">${m.description}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--muted)">${m.molecular_weight ? parseFloat(m.molecular_weight).toFixed(1)+' g/mol' : ''}</span>
+          <span style="font-size:0.72rem;color:var(--accent);border:1px solid #2a4a7f;border-radius:6px;padding:3px 10px">View 3D →</span>
+        </div>
+      </div>`).join('');
+
+  } catch(e) {
+    errEl.textContent = '✕ ' + e.message;
+    errEl.style.display = 'block';
+    result.style.display = 'none';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Find Similar';
+  }
+}
+
+/* ── DRUG DISCOVERY ── */
+function quickDrug(target,constraints){
+  document.getElementById('drug-target').value=target;
+  document.getElementById('drug-constraints').value=constraints;
+  runDrugDiscovery();
+}
+
+function parseCandidates(text) {
+  return text.split(/---+/g).map(b=>b.trim()).filter(Boolean).map(block=>{
+    const get=key=>{const m=block.match(new RegExp(key+':\\s*([^\\n]+)','i'));return m?m[1].trim():'';};
+    return {name:get('CANDIDATE'),smiles:get('SMILES'),mech:get('MECHANISM'),mw:get('LIPINSKI_MW'),logp:get('LIPINSKI_LOGP'),hbd:get('LIPINSKI_HBD'),hba:get('LIPINSKI_HBA'),pass:get('LIPINSKI_PASS'),dl:get('DRUG_LIKENESS'),stage:get('DEVELOPMENT_STAGE')};
+  }).filter(c=>c.name);
+}
+
+function stageClass(s){const sl=s.toLowerCase();if(sl.includes('approved'))return 'stage-approved';if(sl.includes('clinical'))return 'stage-clinical';if(sl.includes('preclinical'))return 'stage-preclinical';return 'stage-conceptual';}
+
+function lipoBar(label,value,max,unit=''){
+  const v=parseFloat(value)||0, pct=Math.min(100,(v/max)*100), ok=v<=max;
+  return `<div class="lipo-row"><span class="lipo-lbl">${label}</span><div class="lipo-track"><div class="lipo-fill ${ok?'ok':'bad'}" style="width:${pct}%"></div></div><span class="lipo-val">${value||'—'}${unit}</span></div>`;
+}
+
+function drugCardHTML(c) {
+  const smilesSafe=c.smiles.replace(/'/g,"\\'"), nameSafe=c.name.replace(/'/g,"\\'");
+  return `<div class="drug-card">
+    <div class="drug-card-header">
+      <span class="drug-name">${c.name||'Unknown'}</span>
+      <span class="stage-badge ${stageClass(c.stage)}">${c.stage||'Unknown'}</span>
+    </div>
+    <div class="lipo-bars">
+      ${lipoBar('MW',c.mw,500,' Da')}
+      ${lipoBar('LogP',c.logp,5)}
+      ${lipoBar('HBD',c.hbd,5)}
+      ${lipoBar('HBA',c.hba,10)}
+    </div>
+    <div class="ro5-row">
+      <span style="font-size:0.7rem;color:var(--muted)">Lipinski Ro5</span>
+      <span style="font-family:'Space Mono',monospace;font-size:0.75rem;margin-left:8px;color:${c.pass.toLowerCase()==='yes'?'var(--green)':'var(--red)'};font-weight:700">${c.pass.toLowerCase()==='yes'?'✓ PASS':'✗ FAIL'}</span>
+    </div>
+    <div class="drug-mech">${c.mech||''}</div>
+    ${c.dl?`<div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.4rem;font-style:italic">${c.dl}</div>`:''}
+    ${c.smiles?`<div class="drug-smiles-text">${c.smiles}</div>`:''}
+    ${c.smiles?`<div class="drug-actions">
+      <button class="drug-action-btn" onclick="goView3D('${nameSafe}')">View 3D</button>
+      <button class="drug-action-btn" onclick="goRDKit('${smilesSafe}')">RDKit Analysis</button>
+    </div>`:''}
+  </div>`;
+}
+
+async function goView3D(nameOrCid) {
+  switchTab('viewer');
+  const input = document.getElementById('mol-input');
+  const btn = document.getElementById('mol-btn');
+
+  // if it's a number it's a CID, resolve to name first
+  if (!isNaN(nameOrCid)) {
+    input.value = 'Loading...';
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${API}/cid-to-name/${nameOrCid}`);
+      const d = await res.json();
+      input.value = d.name;
+    } catch(e) {
+      input.value = nameOrCid; // fallback to CID if it fails
+    } finally {
+      btn.disabled = false;
+    }
+  } else {
+    input.value = nameOrCid;
+  }
+
+  loadMolecule();
+}
+function goRDKit(smiles){switchTab('rdkit');document.getElementById('rdkit-input').value=smiles;runRDKit();}
+
+async function runDrugDiscovery() {
+  const target=document.getElementById('drug-target').value.trim();
+  if (!target) return;
+  const constraints=document.getElementById('drug-constraints').value.trim();
+  const btn=document.getElementById('drug-btn'),errEl=document.getElementById('drug-error');
+  const result=document.getElementById('drug-result'),output=document.getElementById('drug-output');
+  errEl.style.display='none'; btn.disabled=true; btn.textContent='Searching...';
+  result.style.display='block';
+  output.innerHTML='<div class="ai-output loading" style="margin-top:0;grid-column:1/-1">AI is designing candidate molecules...</div>';
+  try {
+    const res=await fetch(`${API}/drug-discovery`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,constraints})});
+    if (!res.ok){const e=await res.json();throw new Error(e.detail);}
+    const d=await res.json();
+    const candidates=parseCandidates(d.candidates);
+    output.innerHTML=candidates.length?candidates.map(drugCardHTML).join(''):`<div class="ai-output" style="margin-top:0;grid-column:1/-1">${d.candidates}</div>`;
+  } catch(e){
+    errEl.textContent='✕ '+e.message; errEl.style.display='block'; result.style.display='none';
+  } finally{btn.disabled=false;btn.textContent='Discover Candidates';}
+}
+
+/* ── PATHWAY ENGINE ── */
+function quickPathway(s,t,c){
+  document.getElementById('pathway-start').value=s;
+  document.getElementById('pathway-target').value=t;
+  document.getElementById('pathway-constraints').value=c;
+  runPathway();
+}
+
+function parsePathway(text){
+  const get=key=>{const m=text.match(new RegExp(key+':\\s*([^\\n]+)','i'));return m?m[1].trim():'';};
+  const steps=[...text.matchAll(/STEP:\s*(\d+)([\s\S]+?)(?=STEP:\s*\d+|ALTERNATIVES:|$)/gi)].map(m=>{
+    const b=m[2], gs=key=>{const r=b.match(new RegExp(key+':\\s*([^\\n]+)','i'));return r?r[1].trim():'';};
+    return {num:m[1],from:gs('FROM'),reagents:gs('REAGENTS'),conditions:gs('CONDITIONS'),to:gs('TO'),yield_est:gs('YIELD_EST'),notes:gs('NOTES')};
+  });
+  const altM=text.match(/ALTERNATIVES:\s*([\s\S]+?)(?=GREEN_SCORE:|$)/i);
+  return {feasibility:get('FEASIBILITY'),totalSteps:get('TOTAL_STEPS'),overallYield:get('OVERALL_YIELD_EST'),greenScore:get('GREEN_SCORE'),alternatives:altM?altM[1].trim():'',steps};
+}
+
+function feasColor(f){const fl=f.toLowerCase();if(fl.startsWith('high'))return 'var(--green)';if(fl.startsWith('medium'))return 'var(--yellow)';return 'var(--red)';}
+function greenLeaves(g){const gl=g.toLowerCase();if(gl.startsWith('good'))return '🌿🌿🌿';if(gl.startsWith('fair'))return '🌿🌿';return '🌿';}
+function parseYieldMid(y){const ns=y.match(/\d+/g);if(!ns)return 75;return ns.length>=2?(+ns[0]+ +ns[1])/2:+ns[0];}
+
+function showStep(step){
+  document.getElementById('sp-title').textContent=`Step ${step.num}: ${step.from} → ${step.to}`;
+  document.getElementById('sp-reagents').textContent=step.reagents||'—';
+  document.getElementById('sp-conditions').textContent=step.conditions||'—';
+  document.getElementById('sp-notes').textContent=step.notes||'—';
+  const pct=Math.min(100,parseYieldMid(step.yield_est));
+  const fill=document.getElementById('sp-yield-fill');
+  fill.style.width=pct+'%';
+  fill.style.background=pct>=70?'var(--green)':pct>=45?'var(--yellow)':'var(--red)';
+  document.getElementById('sp-yield-lbl').textContent=step.yield_est||'—';
+  document.getElementById('step-panel').classList.add('open');
+}
+
+async function runPathway(){
+  const start=document.getElementById('pathway-start').value.trim(), target=document.getElementById('pathway-target').value.trim();
+  if (!start||!target) return;
+  const constraints=document.getElementById('pathway-constraints').value.trim();
+  const btn=document.getElementById('pathway-btn'),errEl=document.getElementById('pathway-error');
+  errEl.style.display='none'; btn.disabled=true; btn.textContent='Planning...';
+  document.getElementById('pathway-result').style.display='none';
+  document.getElementById('step-panel').classList.remove('open');
+  try {
+    const res=await fetch(`${API}/pathway`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start,target,constraints})});
+    if (!res.ok){const e=await res.json();throw new Error(e.detail);}
+    const d=await res.json(), p=parsePathway(d.pathway);
+
+    document.getElementById('pathway-overview').innerHTML=`
+      <div class="ov-card"><div class="ov-label">Feasibility</div><div class="ov-val" style="color:${feasColor(p.feasibility)}">${p.feasibility.split(' ')[0]||'—'}</div></div>
+      <div class="ov-card"><div class="ov-label">Steps</div><div class="ov-val">${p.totalSteps||'—'}</div></div>
+      <div class="ov-card"><div class="ov-label">Overall Yield</div><div class="ov-val" style="font-size:0.75rem">${p.overallYield||'—'}</div></div>
+      <div class="ov-card"><div class="ov-label">Green Score</div><div class="ov-val">${greenLeaves(p.greenScore)}</div></div>`;
+
+    const flow=document.getElementById('pathway-flow');
+    flow.innerHTML='';
+    const startNode=document.createElement('div');
+    startNode.className='flow-node';
+    startNode.innerHTML=`<div class="flow-box start-box"><div class="flow-box-name">${start}</div><div class="flow-box-yield">Start</div></div>`;
+    flow.appendChild(startNode);
+
+    p.steps.forEach((step,i)=>{
+      const conn=document.createElement('div');
+      conn.className='flow-connector';
+      conn.innerHTML=`<div class="flow-step-label">Step ${step.num}</div><div style="display:flex;align-items:center"><div class="flow-line"></div><div class="flow-arrowhead"></div></div>`;
+      flow.appendChild(conn);
+      const node=document.createElement('div');
+      node.className='flow-node';
+      const isLast=i===p.steps.length-1;
+      node.innerHTML=`<div class="flow-box ${isLast?'end-box':''}"><div class="flow-box-name">${step.to||'?'}</div><div class="flow-box-yield">${step.yield_est||''}</div></div>`;
+      node.querySelector('.flow-box').addEventListener('click',()=>showStep(step));
+      flow.appendChild(node);
+    });
+
+    if (p.alternatives||p.greenScore){
+      document.getElementById('pathway-alts-text').textContent=[
+        p.alternatives?'Alternatives: '+p.alternatives:'',
+        p.greenScore?'Green score: '+p.greenScore:''
+      ].filter(Boolean).join('\n\n');
+      document.getElementById('pathway-alts').style.display='block';
+    }
+    document.getElementById('pathway-result').style.display='block';
+  } catch(e){
+    errEl.textContent='✕ '+e.message; errEl.style.display='block';
+  } finally{btn.disabled=false;btn.textContent='Plan Pathway';}
+}
+
+/* ── RDKIT PROPS ── */
+function quickRDKit(smiles){document.getElementById('rdkit-input').value=smiles;runRDKit();}
+
+function drawRadar(desc){
+  const ctx=document.getElementById('radar-chart').getContext('2d');
+  if (radarChart){radarChart.destroy();radarChart=null;}
+  const labels=['MW','LogP','TPSA','HBD','HBA','RotB'];
+  const thresholds=[500,5,140,5,10,10];
+  const vals=[desc.molecular_weight,desc.logp,desc.tpsa,desc.hb_donors,desc.hb_acceptors,desc.rotatable_bonds];
+  const norm=vals.map((v,i)=>Math.min(parseFloat(v)/thresholds[i],1.5));
+  radarChart=new Chart(ctx,{
+    type:'radar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Molecule',data:norm,backgroundColor:'rgba(125,216,255,0.12)',borderColor:'#7dd8ff',borderWidth:2,pointBackgroundColor:norm.map(n=>n>1?'#f87171':'#34d399'),pointRadius:4},
+        {label:'Threshold',data:[1,1,1,1,1,1],backgroundColor:'rgba(0,0,0,0)',borderColor:'rgba(255,255,255,0.12)',borderWidth:1,borderDash:[4,4],pointRadius:0}
+      ]
+    },
+    options:{
+      responsive:false,
+      plugins:{legend:{display:false}},
+      scales:{r:{min:0,max:1.5,grid:{color:'rgba(255,255,255,0.06)'},angleLines:{color:'rgba(255,255,255,0.06)'},ticks:{display:false},pointLabels:{color:'#6b7a99',font:{size:10,family:"'Space Mono',monospace"}}}}
+    }
+  });
+}
+
+async function runRDKit(){
+  const smiles=document.getElementById('rdkit-input').value.trim();
+  if (!smiles) return;
+  const btn=document.getElementById('rdkit-btn'),errEl=document.getElementById('rdkit-error');
+  errEl.style.display='none'; btn.disabled=true; btn.textContent='Computing...';
+  document.getElementById('rdkit-result').style.display='none';
+  try {
+    const res=await fetch(`${API}/rdkit-props?smiles=${encodeURIComponent(smiles)}`);
+    if (!res.ok){const e=await res.json();throw new Error(e.detail);}
+    const d=await res.json(), desc=d.descriptors, dl=d.drug_likeness;
+
+    setTimeout(()=>drawRadar(desc),60);
+
+    const rules=[
+      {name:'Lipinski Ro5',pass:dl.lipinski_pass,verdict:dl.lipinski_pass?'✓ Pass':'✗ Fail',val:`${dl.lipinski_violations} violation${dl.lipinski_violations!==1?'s':''}`,detail:'MW≤500, LogP≤5, HBD≤5, HBA≤10'},
+      {name:'Veber (oral)',pass:dl.veber_pass,verdict:dl.veber_pass?'✓ Pass':'✗ Fail',val:`TPSA ${desc.tpsa}Å²`,detail:`RotB ${desc.rotatable_bonds} (limit 10)`},
+      {name:'Ghose filter',pass:dl.ghose_pass,verdict:dl.ghose_pass?'✓ Pass':'✗ Fail',val:`MW ${desc.molecular_weight} Da`,detail:'160–480 Da, LogP −0.4–5.6'},
+      {name:'QED score',pass:desc.qed_score>=0.5,verdict:desc.qed_score.toFixed(3),val:desc.qed_score>=0.7?'Drug-like':desc.qed_score>=0.5?'Moderate':'Low',detail:'0=poor, 1=ideal drug-like'},
+    ];
+    document.getElementById('rule-tiles').innerHTML=rules.map(r=>`
+      <div class="rule-tile ${r.pass?'pass':'fail'}">
+        <div class="rule-tile-name">${r.name}</div>
+        <div class="rule-tile-verdict">${r.verdict} · ${r.val}</div>
+        <div class="rule-tile-detail">${r.detail}</div>
+      </div>`).join('');
+
+    const passes=[dl.lipinski_pass,dl.veber_pass,dl.ghose_pass].filter(Boolean).length;
+    const banner=document.getElementById('verdict-banner');
+    banner.style.display='flex';
+    if (passes===3){banner.className='verdict-banner good';document.getElementById('verdict-icon').textContent='✓';document.getElementById('verdict-main').textContent='Orally drug-like';document.getElementById('verdict-sub').textContent='Passes all three drug-likeness filters';}
+    else if (passes>=1){banner.className='verdict-banner ok';document.getElementById('verdict-icon').textContent='⚠';document.getElementById('verdict-main').textContent='Partially drug-like';document.getElementById('verdict-sub').textContent=`Passes ${passes}/3 filters — may need optimization or alternative delivery`;}
+    else{banner.className='verdict-banner poor';document.getElementById('verdict-icon').textContent='✗';document.getElementById('verdict-main').textContent='Poor oral bioavailability';document.getElementById('verdict-sub').textContent='Fails all filters — consider IV delivery or structural modification';}
+
+    document.getElementById('rdkit-desc-grid').innerHTML=[
+      ['Mol. Weight',desc.molecular_weight+' Da'],['LogP',desc.logp],['TPSA',desc.tpsa+' Å²'],
+      ['HB Donors',desc.hb_donors],['HB Acceptors',desc.hb_acceptors],['Rotatable Bonds',desc.rotatable_bonds],
+      ['Ring Count',desc.ring_count],['Aromatic Rings',desc.aromatic_rings],['Heavy Atoms',desc.heavy_atom_count],
+      ['Fraction Csp3',desc.fraction_csp3],['QED Score',desc.qed_score]
+    ].map(([l,v])=>`<div class="prop-card"><div class="prop-label">${l}</div><div class="prop-value" style="font-size:0.85rem">${v}</div></div>`).join('');
+
+    document.getElementById('rdkit-result').style.display='block';
+  } catch(e){
+    errEl.textContent='✕ '+e.message; errEl.style.display='block';
+  } finally{btn.disabled=false;btn.textContent='Compute';}
+}
+
+/* key bindings */
+document.getElementById('mol-input').addEventListener('keydown',e=>e.key==='Enter'&&loadMolecule());
+document.getElementById('r1').addEventListener('keydown',e=>e.key==='Enter'&&predictReaction());
+document.getElementById('r2').addEventListener('keydown',e=>e.key==='Enter'&&predictReaction());
+document.getElementById('drug-target').addEventListener('keydown',e=>e.key==='Enter'&&runDrugDiscovery());
+document.getElementById('pathway-target').addEventListener('keydown',e=>e.key==='Enter'&&runPathway());
+document.getElementById('rdkit-input').addEventListener('keydown',e=>e.key==='Enter'&&runRDKit());
+document.getElementById('similar-input').addEventListener('keydown', e => e.key==='Enter' && runSimilar());
+</script>
+</body>
+</html>
